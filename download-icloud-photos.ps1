@@ -136,7 +136,7 @@ foreach ($src in $sources) {
 
         $currentFile++
         $personFile++
-        if ($personFile -gt 1) { $currentFile--; break }
+        #if ($personFile -gt 5) { $currentFile--; break }
         $elapsed = (Get-Date) - $startTime
         $avgSec = if ($elapsed.TotalSeconds -gt 0) { $elapsed.TotalSeconds / $currentFile } else { 0 }
         $remaining = [int]($avgSec * ($totalFiles - $currentFile))
