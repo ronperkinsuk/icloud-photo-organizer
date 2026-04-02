@@ -1,4 +1,4 @@
-# Multi-user iCloud Photo Organizer (Windows)
+# Multi-User iCloud Photo Organizer (Windows)
 
 A resilient PowerShell solution to organise iCloud Photos (via iCloud for Windows) into a clean, structured, and de-duplicated archive.
 
