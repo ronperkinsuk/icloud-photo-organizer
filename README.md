@@ -6,16 +6,14 @@ A resilient PowerShell solution to organise iCloud Photos (via iCloud for Window
 
 - Supports multiple iCloud accounts (e.g. personal, spouse, family)
 - Automatically organises media into:
-  
-Person / Photos or Videos / Year / Device Model, WhatsApp, or Unknown
-
+  - Person / Photos or Videos / Year / Device Model, WhatsApp, or Unknown
 - Extracts metadata using ExifTool (date taken, device model)
 - Builds a date-based model map to infer missing metadata for videos
 - Detects and skips duplicate files per user (SHA256 hashing)
 - Intelligent classification:
-- MP4 → WhatsApp
-- Non-EXIF photos → WhatsApp
-- Non-EXIF videos → Unknown Model
+  - MP4 → WhatsApp
+  - Non-EXIF photos → WhatsApp
+  - Non-EXIF videos → Unknown Model
 - Fully compatible with iCloud "Optimise Storage" (on-demand files)
 - Forces download of cloud-only files with timeout handling
 - Automatically reverts files back to cloud-only after processing
