@@ -27,8 +27,9 @@
 
 .NOTES
     Author: Ron Perkins
-    Version: 1.0.0
+    Version: 1.1.0
     Created: 2026-04-02
+    Update: 2026-04-05
 
 .REQUIREMENTS
     - Windows 10/11
@@ -59,7 +60,10 @@ while ($true) {
     }
 
     $processedCount = 0
-    if (Test-Path $logFile) { $processedCount = (Get-Content $logFile).Count }
+    foreach ($src in $sources) {
+        $logFile = Get-PersonLogFile $src.Person
+        if (Test-Path $logFile) { $processedCount += (Get-Content $logFile).Count }
+    }
 
     Write-Host "Processed: $processedCount / $totalFiles"
 
