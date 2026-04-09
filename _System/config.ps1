@@ -8,8 +8,10 @@ $sources = @(
     @{ Path = "C:\Users\User3\Pictures\iCloud Photos\Photos";  Person = "User3" }
 )
 
-$dest             = "D:\Photos\Phone Media"
-$sysDir           = "D:\Photos\Phone Media\_System"
+$destPhoto        = "D:\Phone Media\Photos"
+$destVideo        = "D:\Phone Media\Videos"
+$sysDir           = "C:\Tools\icloud-photo-organizer\_System"
+$exiftool         = "C:\Tools\Exiftool\exiftool.exe"
 $tempDir          = "$sysDir\Temp"
 $logsDir          = "$sysDir\Logs"
 $dataDir          = "$sysDir\Data"
@@ -17,7 +19,7 @@ $logFile          = "$dataDir\processed.log"
 $hashLog          = "$dataDir\hashes.csv"
 $errorLog         = "$logsDir\errors.log"
 $slowLog          = "$logsDir\slow-downloads.log"
-$exiftool         = "C:\Tools\Exiftool\exiftool.exe"
+
 $maxWaitSecPhoto  = 120  # 2 minutes for photos
 $maxWaitSecVideo  = 600  # 10 minutes for videos
 $processFileLimit = 2000
