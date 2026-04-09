@@ -1,45 +1,41 @@
 <#
 .SYNOPSIS
-    iCloud Photos Organizer for Windows with resilient processing and deduplication
+    iCloud Photos Organizer for Windows
 
 .DESCRIPTION
     This script processes iCloud Photos downloaded via iCloud for Windows across multiple user accounts,
-    extracting metadata using ExifTool and organising media into a structured, de-duplicated folder hierarchy.
+    extracts metadata using ExifTool, and organises media into a structured folder hierarchy.
 
-    Files are organised as:
-        Person → Media Type (Photos/Videos) → Year → Device Model / WhatsApp / Unknown
+    Files are grouped by:
+        Person → Year → Device Model or WhatsApp
 
-    Key features:
-        - Forces download of iCloud "on-demand" (stub) files with configurable timeouts
-        - Uses a temporary working directory to avoid iCloud locking and partial file issues
-        - Extracts EXIF metadata (DateTimeOriginal, CreateDate, device model) using ExifTool
-        - Builds a per-user date-to-model map from photos to infer missing video metadata
-        - Automatically classifies:
-            * MP4 → WhatsApp
-            * Non-EXIF media → WhatsApp (photos) or Unknown Model (videos)
-        - Performs SHA256 hashing to detect and skip duplicate files per user
-        - Maintains persistent state:
-            * processed.log → tracks processed source files (safe re-runs)
-            * hashes.csv   → tracks deduplicated content
-        - Supports crash-safe restarts without reprocessing completed files
-        - Logs:
-            * Run activity (per execution)
-            * Errors
-            * Slow iCloud downloads
-        - Tracks progress with elapsed time, ETA, and per-user statistics
-        - Reverts processed files back to iCloud "Free up space" (stub state) to minimise disk usage
-        - Separates persistent state data from disposable run logs
-        - Automatically exits after a batch (2000 files) to allow clean restarts and memory stability
+    Script updates:
+        - Triggers iCloud stub hydration via a lightweight 1-byte FileStream read to avoid Windows dialogs
+        - Uses [System.IO.File]::Copy() instead of Copy-Item to suppress shell dialog prompts
+        - Uses a temporary working directory to avoid iCloud file locking issues
+        - Extracts EXIF metadata (date taken, device model)
+        - Builds a date-to-model map from photos to infer camera model for videos with no EXIF
+        - Routes MP4 files to WhatsApp folder, MOV/M4V without model to Unknown Model folder
+        - Detects and skips duplicate files per user using SHA256 hashes
+        - Separates WhatsApp / non-EXIF media into appropriate folders
+        - Outputs photos and videos to separate destination root folders
+        - Appends a timestamp suffix to destination filename if a name collision occurs
+        - Logs processed files per person to allow re-running individual people from scratch
+        - Logs errors, slow downloads and run history to separate log files
+        - Tracks progress, ETA, elapsed time and per-user statistics
+        - Reverts processed files back to iCloud stub state to free disk space
+        - Separates critical state files from disposable run logs
+        - Configurable download timeouts and source paths
 
 .NOTES
     Author: Ron Perkins
-    Version: 2.0.0
+    Version: 2.3.0
     Created: 2026-03-31
-    Updated: 2026-04-02
+    Updated: 2026-04-09
 
 .REQUIREMENTS
     - Windows 10/11
-    - iCloud for Windows (Photos enabled with "Optimise Storage")
+    - iCloud for Windows (Photos enabled)
     - ExifTool (https://exiftool.org/)
     - PowerShell 5.1+
 
@@ -87,13 +83,21 @@ function Log {
     Add-Content $runLog $line
 }
 
-if (!(Test-Path $hashLog)) { "Person,Hash" | Out-File $hashLog }
+<#
+ Load per-person processed and hash data
+#>
 $processed = @{}
-if (Test-Path $logFile) { Get-Content $logFile | ForEach-Object { $processed[$_] = $true } }
-
 $hashDB = @{}
-if (Test-Path $hashLog) {
-    Import-Csv $hashLog | ForEach-Object { $hashDB["$($_.Person)|$($_.Hash)"] = $true }
+foreach ($src in $sources) {
+    $person  = $src.Person
+    $logFile = Get-PersonLogFile $person
+    $hashLog = Get-PersonHashFile $person
+
+    if (!(Test-Path $hashLog)) { "Person,Hash" | Out-File $hashLog }
+    if (Test-Path $logFile) { Get-Content $logFile | ForEach-Object { $processed[$_] = $true } }
+    if (Test-Path $hashLog) {
+        Import-Csv $hashLog | ForEach-Object { $hashDB["$($_.Person)|$($_.Hash)"] = $true }
+    }
 }
 
 $stats = @{}
@@ -109,6 +113,7 @@ foreach ($src in $sources) {
         ($photoExt -contains $ext) -or ($videoExt -contains $ext)
     }).Count
 }
+$totalFiles -= $processed.Count
 $currentFile = 0
 $startTime = Get-Date
 $dateModelMap = @{}
@@ -119,6 +124,8 @@ $dateModelMap = @{}
 foreach ($src in $sources) {
     $sourcePath = $src.Path
     $person     = $src.Person
+    $logFile    = Get-PersonLogFile $person
+    $hashLog    = Get-PersonHashFile $person
 
     $stats[$person] = @{ Photos = 0; Videos = 0; WhatsApp = 0; Skipped = 0; Errors = 0 }
 
@@ -143,7 +150,7 @@ foreach ($src in $sources) {
         $remaining = [int]($avgSec * ($totalFiles - $currentFile))
         $elapsedStr = "{0:hh\:mm\:ss}" -f [timespan]::FromSeconds($elapsed.TotalSeconds)
         $etaStr = "{0:hh\:mm\:ss}" -f [timespan]::FromSeconds($remaining)
-        $remainingFiles = $totalFiles - $processed.Count - 1
+        $remainingFiles = $totalFiles - $currentFile
         Log "[$currentFile | $remainingFiles] Time: $elapsedStr | ETA: $etaStr | Processing: $person - $($file.Name)"
 
         $tempFile = Join-Path $tempDir ([System.IO.Path]::GetFileName($filePath))
@@ -152,6 +159,33 @@ foreach ($src in $sources) {
             <#
              Wait for iCloud Download
             #>
+            $maxWaitSec = if ($videoExt -contains $ext) { $maxWaitSecVideo } else { $maxWaitSecPhoto }
+            $waited = 0
+
+            while ($true) {
+                $origFile = Get-Item $filePath
+
+                if (-not ($origFile.Attributes -band [System.IO.FileAttributes]::Offline)) {
+                    break
+                }
+
+                # Trigger hydration (light touch)
+                try {
+                    $fs = [System.IO.File]::Open($filePath, 'Open', 'Read', 'ReadWrite')
+                    $buffer = New-Object byte[] 1
+                    try { $fs.Read($buffer, 0, 1) | Out-Null } finally { $fs.Close() }
+                } catch {}
+
+                Start-Sleep -Seconds 2
+                $waited += 2
+
+                if ($waited -ge $maxWaitSec) {
+                    Add-Content $slowLog "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $filePath"
+                    throw "iCloud did not download file after $maxWaitSec seconds"
+                }
+            }
+
+            <#
             $maxWaitSec = if ($videoExt -contains $ext) { $maxWaitSecVideo } else { $maxWaitSecPhoto }
             $waited = 0
             try { $null = [System.IO.File]::ReadAllBytes($filePath) } catch { }
@@ -165,11 +199,17 @@ foreach ($src in $sources) {
                 $waited += 2
                 $origFile = Get-Item $filePath
             }
+            #>
 
             <#
              Copy to Temp
             #>
-            Copy-Item $filePath -Destination $tempFile -Force -ErrorAction Stop
+            #Copy-Item $filePath -Destination $tempFile -Force -ErrorAction Stop
+            try {
+                [System.IO.File]::Copy($filePath, $tempFile, $true)
+            } catch {
+                throw "Temp copy failed: $($_.Exception.Message)"
+            }
             if (!(Test-Path $tempFile)) { throw "Temp copy failed" }
 
             <#
@@ -237,7 +277,12 @@ foreach ($src in $sources) {
             <#
              Destination
             #>
-            $targetFolder = "$dest\$person\$typeFolder\$year\$subFolder"
+            if ($typeFolder -eq "Videos") {
+                $targetFolder = "$destVideo\$person\$year\$subFolder"
+            } else {
+                $targetFolder = "$destPhoto\$person\$year\$subFolder"
+            }
+
             New-Item -ItemType Directory -Force -Path $targetFolder | Out-Null
 
             $destFile = Join-Path $targetFolder $file.Name
@@ -279,7 +324,7 @@ foreach ($src in $sources) {
             Log "  Done -> $targetFolder"
 
             <#
-             Exit after 2000 files so launcher can restart in a fresh process
+             Exit after file limit so launcher can restart in a fresh process
             #>
             if ($currentFile -ge $processFileLimit) {
                 Log ""
