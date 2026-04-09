@@ -6,7 +6,7 @@ A resilient PowerShell solution to organise iCloud Photos (via iCloud for Window
 
 - Supports multiple iCloud accounts (e.g. personal, spouse, family)
 - Automatically organises media into:
-  - Person / Photos or Videos / Year / Device Model, WhatsApp, or Unknown
+  - Person / Year / Device Model, WhatsApp, or Unknown
 - Extracts metadata using ExifTool (date taken, device model)
 - Builds a date-based model map to infer missing metadata for videos
 - Detects and skips duplicate files per user (SHA256 hashing)
@@ -28,16 +28,19 @@ A resilient PowerShell solution to organise iCloud Photos (via iCloud for Window
 
 ## 📂 Example Output Structure
 ```
-D:\Photos\Phone Media
+D:\Phone Media\Photos
 ├── User1
-│   ├── Photos
-│   │   ├── 2026
-│   │   │   ├── iPhone 17 Pro
-│   │   │   └── WhatsApp
-│   └── Videos
-│       ├── 2026
-│       │   ├── iPhone 17 Pro
-│       │   └── Unknown Model
+│   ├── 2026
+│   │   ├── iPhone 17 Pro
+│   │   └── WhatsApp
+├── User2
+└── User3
+
+D:\Phone Media\Videos
+├── User1
+│   ├── 2026
+│   │   ├── iPhone 17 Pro
+│   │   └── Unknown Model
 ├── User2
 └── User3
 ```
@@ -63,20 +66,25 @@ https://exiftool.org/
 ```
 C:\Users\<User1>\Pictures\iCloud Photos\Photos
 ```
-3. Download ExifTool and update the path in `config.ps1`:
+3. Download icloud-photo-organizer and update the path in `config.ps1`:
+```
+$sysDir = "C:\Tools\icloud-photo-organizer\_System"
+```
+4. Download ExifTool and update the path in `config.ps1`:
 ```
 $exiftool = "C:\Tools\Exiftool\exiftool.exe"
 ```
-4. Configure your source accounts:
+5. Configure your source accounts:
 ```
 $sources = @(
    @{ Path = "C:\Users\User1\Pictures\iCloud Photos\Photos"; Person = "User1" },
    @{ Path = "C:\Users\User2\Pictures\iCloud Photos\Photos"; Person = "User2" }
 )
 ```
-5. Set your destination folder:
+6. Set your destination folders:
 ```
-$dest = "D:\Photos\Phone Media"
+$destPhoto = "D:\Phone Media\Photos"
+$destVideo = "D:\Phone Media\Videos"
 ```
 
 ---
@@ -131,15 +139,24 @@ The script is fully restart-safe:
 
 Located in:
 ```
-D:\Photos\Phone Media\Logs\
+C:\Tools\icloud-photo-organizer\Logs\
 ```
 
-- `processed.log` → files already handled
-- `hashes.csv` → duplicate detection
 - `errors.log` → failures
 - `slow.log` → files that exceeded download timeout
 - `run_*.log` → full run logs
 
+---
+
+## 📁 Data
+
+Located in:
+```
+C:\Tools\icloud-photo-organizer\Data\
+```
+
+- `<User>-processed.log` → files already handled for user
+- `<User>-hashes.csv` → duplicate detection for user
 ---
 
 ## ⚠️ Known Limitations
