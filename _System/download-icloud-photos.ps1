@@ -186,22 +186,6 @@ foreach ($src in $sources) {
             }
 
             <#
-            $maxWaitSec = if ($videoExt -contains $ext) { $maxWaitSecVideo } else { $maxWaitSecPhoto }
-            $waited = 0
-            try { $null = [System.IO.File]::ReadAllBytes($filePath) } catch { }
-            $origFile = Get-Item $filePath
-            while ($origFile.Attributes -band [System.IO.FileAttributes]::Offline) {
-                if ($waited -ge $maxWaitSec) {
-                    Add-Content $slowLog "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $filePath"
-                    throw "iCloud did not download file after $maxWaitSec seconds"
-                }
-                Start-Sleep -Seconds 2
-                $waited += 2
-                $origFile = Get-Item $filePath
-            }
-            #>
-
-            <#
              Copy to Temp
             #>
             #Copy-Item $filePath -Destination $tempFile -Force -ErrorAction Stop
