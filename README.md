@@ -170,7 +170,7 @@ C:\Tools\icloud-photo-organizer\Data\
 
 ## 📜 License
 
-MIT License
+GPL License
 
 ---
 
